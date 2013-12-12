@@ -64,7 +64,7 @@ module S3Encrypt
     desc "put bucket object", "Put the object in the bucket"
     def put(bucket, object)
       bucket = s3.buckets[bucket]
-      bucket.objects[object].write(File.open(object), :encryption_key => crypt)
+      bucket.objects[object].write(File.open(object), :encryption_key => pubcrypt)
     end
 
     desc "remove bucket object", "IN DEVELOPMENT... Remove the object in the bucket"
@@ -96,6 +96,14 @@ module S3Encrypt
         @crypt ||= OpenSSL::PKey::RSA.new File.read(private_key)
       else
         @crypt ||= gen_key
+      end
+    end
+
+    def pubcrypt
+      if File.exists?(public_key)
+        @pubcrypt ||= OpenSSL::PKey::RSA.new File.read(public_key)
+      else
+        puts "ERROR: Unable to retrieve public key"
       end
     end
 
