@@ -16,10 +16,14 @@ module S3Encrypt
     class_option  :secret_key, 
                   :aliases => :s, 
                   :desc => "AWS secret key"
-    class_option  :encryption_file, 
-                  :aliases => :e, 
-                  :desc => "Encryption file name",
-                  :default => '~/.s3encrypt'
+    class_option  :pub, 
+                  :aliases => :p, 
+                  :desc => "Public key file",
+                  :default => '~/.s3encrypt.pub'
+    class_option  :priv, 
+                  :aliases => :k, 
+                  :desc => "Private key file",
+                  :default => '~/.s3encrypt.pem'
     class_option  :bucket, 
                   :aliases => :b, 
                   :desc => "S3 Bucket to upload file to",
@@ -71,7 +75,7 @@ module S3Encrypt
       bucket.objects[object].write(File.open(object), :encryption_key => pubcrypt)
     end
 
-    desc "remove bucket object", "IN DEVELOPMENT... Remove the object in the bucket"
+    desc "remove bucket object", "Remove the object in the bucket"
     def remove(bucket, object)
       bucket = s3.buckets[bucket]
       bucket.objects[object].delete
@@ -80,7 +84,7 @@ module S3Encrypt
     desc "get bucket object", "Get the object in the bucket"
     def get(bucket, object)
       bucket = s3.buckets[bucket]
-      if :unencrypted
+      if options[:unencrypted]
         open object, 'w' do |io| io.write bucket.objects[object].read end
       else
         open object, 'w' do |io| io.write bucket.objects[object].read(:encryption_key => crypt) end
@@ -93,11 +97,11 @@ module S3Encrypt
     end
 
     def private_key
-      @private_key ||= File.expand_path(options[:encryption_file] + '.pri.pem') 
+      @private_key ||= File.expand_path(options[:priv]) 
     end
 
     def public_key
-      @public_key ||= File.expand_path(options[:encryption_file] + '.pub.pem')
+      @public_key ||= File.expand_path(options[:pub])
     end
 
     def crypt

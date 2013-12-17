@@ -1,6 +1,6 @@
 # s3encrypt
 
-`s3encrypt` is a simple cli tool for encrypting files uploaded to s3
+`s3encrypt` is a simple cli tool for encrypting files uploaded to s3 using asymmetric keys
 
 ## Description
 
