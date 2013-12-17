@@ -24,6 +24,10 @@ module S3Encrypt
                   :aliases => :b, 
                   :desc => "S3 Bucket to upload file to",
                   :default => 's3encrypt'
+    class_option  :unencrypted, 
+                  :type => :boolean,
+                  :aliases => :u, 
+                  :desc => "Do not decrypt file"
 
     desc "create-key", "Creates key files for encryption"
     def create_key
@@ -68,14 +72,19 @@ module S3Encrypt
     end
 
     desc "remove bucket object", "IN DEVELOPMENT... Remove the object in the bucket"
-    def remove
-      puts "In development"
+    def remove(bucket, object)
+      bucket = s3.buckets[bucket]
+      bucket.objects[object].delete
     end
 
     desc "get bucket object", "Get the object in the bucket"
     def get(bucket, object)
       bucket = s3.buckets[bucket]
-      open object, 'w' do |io| io.write bucket.objects[object].read(:encryption_key => crypt) end
+      if :unencrypted
+        open object, 'w' do |io| io.write bucket.objects[object].read end
+      else
+        open object, 'w' do |io| io.write bucket.objects[object].read(:encryption_key => crypt) end
+      end
     end
 
     private
