@@ -18,12 +18,12 @@ module S3Encrypt
                   :desc => "AWS secret key"
     class_option  :pub, 
                   :aliases => :p, 
-                  :desc => "Public key file",
-                  :default => '~/.s3encrypt.pub'
+                  :desc => "Public key file"
+#                  :default => '~/.s3encrypt.pub'
     class_option  :priv, 
                   :aliases => :k, 
-                  :desc => "Private key file",
-                  :default => '~/.s3encrypt.pem'
+                  :desc => "Private key file"
+#                  :default => '~/.s3encrypt.pem'
     class_option  :bucket, 
                   :aliases => :b, 
                   :desc => "S3 Bucket to upload file to",
@@ -72,7 +72,9 @@ module S3Encrypt
     desc "put bucket object", "Put the object in the bucket"
     def put(bucket, object)
       bucket = s3.buckets[bucket]
-      bucket.objects[object].write(File.open(object), :encryption_key => pubcrypt)
+      bucket.objects[object].write(File.open(object), 
+                                   :encryption_key => pubcrypt, 
+                                   :encryption_materials_location => :instruction_file)
     end
 
     desc "remove bucket object", "Remove the object in the bucket"
@@ -87,7 +89,12 @@ module S3Encrypt
       if options[:unencrypted]
         open object, 'w' do |io| io.write bucket.objects[object].read end
       else
-        open object, 'w' do |io| io.write bucket.objects[object].read(:encryption_key => crypt) end
+        if bucket.objects[object + '.instruction'].exists?
+          puts "Object found #{object}.instruction"
+        end
+        open object, 'w' do |io| 
+          io.write bucket.objects[object].read(:encryption_key => crypt, 
+                                               :encryption_materials_location => :instruction_file) end
       end
     end
 
