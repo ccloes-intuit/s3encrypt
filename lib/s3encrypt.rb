@@ -84,7 +84,7 @@ module S3Encrypt
       bucket.objects[object].write(File.open(object), 
                                    :encryption_key => pubcrypt, 
                                    :encryption_materials_location => :instruction_file)
-      bucket.objects[object].metadata[options[:metadata]] = File.basename(public_key)
+      bucket.objects[object].metadata[options[:metadata]] = File.basename(public_key, '.pub')
     end
 
     desc "remove bucket object", "Remove the object in the bucket"
@@ -110,7 +110,7 @@ module S3Encrypt
       end
     end
 
-    desc "inspect bucket object", "Return the metadata for an object"
+    desc "inspect bucket object", "Return the encryption key metadata for an object"
     def inspect(name, object)
       bucket = s3.buckets[name]
       puts "#{bucket.objects[object].metadata[options[:metadata]]}"
@@ -127,7 +127,7 @@ module S3Encrypt
       bucket.objects[object].write(File.open(tmpfile), 
                                    :encryption_key => rotate_crypt, 
                                    :encryption_materials_location => :instruction_file)
-      bucket.objects[object].metadata[options[:metadata]] = File.basename(rotate_key)
+      bucket.objects[object].metadata[options[:metadata]] = File.basename(rotate_key, '.pub')
       File.delete(tmpfile)
     end
 
@@ -136,13 +136,13 @@ module S3Encrypt
       bucket = s3.buckets[name]
       bucket.objects.each do |obj|
         next if obj.key =~ /^.*\.instruction$/
-        if obj.metadata[options[:metadata]] == File.basename(rotate_key) 
-          puts "#{obj.key} is already rotated"
-        else
+        unless obj.metadata[options[:metadata]] == File.basename(rotate_key, '.pub') 
           print "#{obj.key} ...  "
           rotate(name, obj.key.to_s)
           puts "rotated"
-        end
+        else
+          puts "#{obj.key} is already rotated"
+       end
       end
     end
 
