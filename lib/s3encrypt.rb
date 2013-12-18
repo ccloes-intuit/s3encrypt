@@ -1,6 +1,7 @@
 require 'aws-sdk'
 require 'openssl'
 require 'thor'
+require 'securerandom'
 
 module S3Encrypt
   require "s3encrypt/version"
@@ -32,6 +33,13 @@ module S3Encrypt
                   :type => :boolean,
                   :aliases => :u, 
                   :desc => "Do not decrypt file"
+    class_option  :rotate, 
+                  :aliases => :r,
+                  :desc => "Key to rotate to"
+    class_option  :metadata, 
+                  :aliases => :m,
+                  :desc => "User defined metadata for key identification",
+                  :default => 'encryption_key'
 
     desc "create-key", "Creates key files for encryption"
     def create_key
@@ -62,39 +70,79 @@ module S3Encrypt
     end
 
     desc "list-objects bucket", "List all the keys in a specific bucket"
-    def list_objects(bucket)
-      bucket = s3.buckets[bucket]
+    def list_objects(name)
+      bucket = s3.buckets[name]
       bucket.objects.each do |obj|
-        puts obj.key
+        puts obj.key unless obj.key =~ /^.*\.instruction$/
       end
     end
 
     desc "put bucket object", "Put the object in the bucket"
-    def put(bucket, object)
-      bucket = s3.buckets[bucket]
+    def put(name, object)
+      puts "Using #{File.basename(public_key)} for encryption"
+      bucket = s3.buckets[name]
       bucket.objects[object].write(File.open(object), 
                                    :encryption_key => pubcrypt, 
                                    :encryption_materials_location => :instruction_file)
+      bucket.objects[object].metadata[options[:metadata]] = File.basename(public_key)
     end
 
     desc "remove bucket object", "Remove the object in the bucket"
-    def remove(bucket, object)
-      bucket = s3.buckets[bucket]
+    def remove(name, object)
+      bucket = s3.buckets[name]
       bucket.objects[object].delete
+      bucket.objects[object + '.instruction'].delete
     end
 
     desc "get bucket object", "Get the object in the bucket"
-    def get(bucket, object)
-      bucket = s3.buckets[bucket]
+    def get(name, object)
+      puts "Using #{File.basename(private_key)} for decryption"
+      bucket = s3.buckets[name]
       if options[:unencrypted]
-        open object, 'w' do |io| io.write bucket.objects[object].read end
-      else
-        if bucket.objects[object + '.instruction'].exists?
-          puts "Object found #{object}.instruction"
+        open object, 'w' do |io| 
+          io.write bucket.objects[object].read 
         end
+      else
         open object, 'w' do |io| 
           io.write bucket.objects[object].read(:encryption_key => crypt, 
-                                               :encryption_materials_location => :instruction_file) end
+                                               :encryption_materials_location => :instruction_file) 
+        end
+      end
+    end
+
+    desc "inspect bucket object", "Return the metadata for an object"
+    def inspect(name, object)
+      bucket = s3.buckets[name]
+      puts "#{bucket.objects[object].metadata[options[:metadata]]}"
+    end
+
+    desc "rotate bucket object", "Re-encrypt file using new key"
+    def rotate(name, object)
+      tmpfile = SecureRandom.urlsafe_base64(20)
+      bucket = s3.buckets[name]
+      open tmpfile, 'w' do |io| 
+        io.write bucket.objects[object].read(:encryption_key => crypt, 
+                                             :encryption_materials_location => :instruction_file) 
+      end
+      bucket.objects[object].write(File.open(tmpfile), 
+                                   :encryption_key => rotate_crypt, 
+                                   :encryption_materials_location => :instruction_file)
+      bucket.objects[object].metadata[options[:metadata]] = File.basename(rotate_key)
+      File.delete(tmpfile)
+    end
+
+    desc "rotateall bucket", "Re-encrypt all files using the new key"
+    def rotateall(name)
+      bucket = s3.buckets[name]
+      bucket.objects.each do |obj|
+        next if obj.key =~ /^.*\.instruction$/
+        if obj.metadata[options[:metadata]] == File.basename(rotate_key) 
+          puts "#{obj.key} is already rotated"
+        else
+          print "#{obj.key} ...  "
+          rotate(name, obj.key.to_s)
+          puts "rotated"
+        end
       end
     end
 
@@ -104,18 +152,47 @@ module S3Encrypt
     end
 
     def private_key
-      @private_key ||= File.expand_path(options[:priv]) 
+      if options[:priv]
+        @private_key ||= File.expand_path(options[:priv])
+      else
+        puts "ERROR: Key not supplied"
+        exit
+      end
     end
 
     def public_key
-      @public_key ||= File.expand_path(options[:pub])
+      if options[:pub]
+        @public_key ||= File.expand_path(options[:pub])
+      else
+        puts "ERROR: Public key not supplied"
+        exit
+      end
+    end
+
+    def rotate_key
+      if options[:rotate]
+        @rotate_key ||= File.expand_path(options[:rotate])
+      else
+        puts "ERROR: Rotate key not supplied"
+        exit
+      end
     end
 
     def crypt
       if File.exists?(private_key)
         @crypt ||= OpenSSL::PKey::RSA.new File.read(private_key)
       else
-        @crypt ||= gen_key
+        puts "ERROR: Unable to retrieve private key"
+        exit
+      end
+    end
+
+    def rotate_crypt
+      if File.exists?(rotate_key)
+         @rotate_crypt ||= OpenSSL::PKey::RSA.new File.read(rotate_key)
+      else
+        puts "ERROR: Unable to retrieve rotate key"
+        exit
       end
     end
 
@@ -124,6 +201,7 @@ module S3Encrypt
         @pubcrypt ||= OpenSSL::PKey::RSA.new File.read(public_key)
       else
         puts "ERROR: Unable to retrieve public key"
+        exit
       end
     end
 
@@ -136,8 +214,6 @@ module S3Encrypt
     end 
 
     def read_credentials
-      access_key = secret_key = nil
-
       if options[:access_key] || options[:secret_key]
         access_key = options[:access_key]
         secret_key = options[:secret_key]
