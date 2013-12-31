@@ -206,7 +206,7 @@ module S3Encrypt
     end
 
     def gen_key
-      encryption_key = OpenSSL::PKey::RSA.new(4096)
+      encryption_key = OpenSSL::PKey::RSA.new(2048)
       puts "Writing #{private_key}"
       puts "Writing #{public_key}"
       File.open(private_key, 'w') { |io| io.write encryption_key.to_pem }
@@ -219,8 +219,8 @@ module S3Encrypt
         secret_key = options[:secret_key]
       else
         File.open(File.expand_path(options[:credential_file])).each do |line|
-          access_key = $1 if line =~ /^AWSAccessKeyId=(.*)$/
-          secret_key = $1 if line =~ /^AWSSecretKey=(.*)$/
+          access_key = $1 if line =~ /^accessKey=(.*)$/
+          secret_key = $1 if line =~ /^secretKey=(.*)$/
         end
       end
       return [access_key, secret_key]
