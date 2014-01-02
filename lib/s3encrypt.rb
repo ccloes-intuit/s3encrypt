@@ -219,8 +219,8 @@ module S3Encrypt
         secret_key = options[:secret_key]
       else
         File.open(File.expand_path(options[:credential_file])).each do |line|
-          access_key = $1 if line =~ /^accessKey=(.*)$/
-          secret_key = $1 if line =~ /^secretKey=(.*)$/
+          access_key = $1 if line =~ /^accessKey = (.*)$/
+          secret_key = $1 if line =~ /^secretKey = (.*)$/
         end
       end
       return [access_key, secret_key]
