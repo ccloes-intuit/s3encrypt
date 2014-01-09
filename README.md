@@ -10,6 +10,7 @@ Provides a `s3encrypt` executable that allows you to upload encrypted files to s
 
 Install with:
 
+  $ bundle
   $ rake install
 
 ## Usage
